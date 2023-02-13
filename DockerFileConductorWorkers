@@ -1,0 +1,44 @@
+# Replace this version when you want to upgrade or build with a specific version
+# You can replace this image to your container repository location. Please push the required image into your container repository before running the build.
+ARG CONDUCTOR_VERSION
+FROM orkesio/orkes-conductor-workers:$CONDUCTOR_VERSION AS builder
+# Replace this OSS base image with you own custom base OSS image as required, everything else should remain the same
+FROM alpine:3.16.2
+
+MAINTAINER Orkes Inc <builds@orkes.io>
+
+RUN apk add nginx
+RUN nginx -version
+
+RUN apk add openjdk11
+RUN java --version
+
+RUN apk add coreutils
+
+# Update certs -sometimes M1 macs have issues without it
+RUN update-ca-certificates -f
+
+RUN addgroup -S conductor && adduser -S conductor -G conductor
+
+# Startup script(s)
+COPY --from=builder /app/startup.sh /app/startup.sh
+
+# JAR files
+COPY --from=builder /app/libs/workers.jar /app/libs/workers.jar
+
+RUN chmod +x /app/startup.sh
+
+HEALTHCHECK --interval=60s --timeout=30s --retries=10 CMD curl -I -XGET http://localhost:8085/health || exit 1
+EXPOSE 8085
+
+# Make app folders
+RUN mkdir -p /app/config /app/logs /app/libs
+RUN chown -R conductor:conductor /app
+
+USER conductor
+
+CMD ["/app/startup.sh"]
+ENTRYPOINT ["/bin/sh"]
+
+
+
